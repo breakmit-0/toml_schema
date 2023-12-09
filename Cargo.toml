@@ -3,6 +3,11 @@ name = "toml_schema"
 version = "0.1.0"
 edition = "2021"
 exculde = ["/test_files", "README.md"]
+license = "GPL-3.0"
+license-file = "LICENSE"
+repository = "https://github.com/breakmit-0/toml_schema"
+categories = ["parser-implementations"]
+keywords = ["toml", "schema", "parser"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
