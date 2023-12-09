@@ -2,7 +2,6 @@
 name = "toml_schema"
 version = "0.1.0"
 edition = "2021"
-exculde = ["/test_files", "README.md"]
 license = "GPL-3.0"
 description = "A crate for quicky checking the structure of TOML data, similar to JSON schemas"
 repository = "https://github.com/breakmit-0/toml_schema"
@@ -15,3 +14,5 @@ keywords = ["toml", "schema", "parser"]
 log = "0.4.20"
 regex = "1.10.2"
 toml = "0.8.8"
+
+[dev-dependencies]

@@ -35,6 +35,10 @@ impl TomlSchema {
             SchemaType::Table => parse_table(table),
 
             SchemaType::Alternative => parse_alternative(table),
+
+            SchemaType::Anything => parse_anything(table),
+
+            SchemaType::Exact => parse_exact(table)
         }
     }
 }
@@ -186,6 +190,53 @@ fn parse_date(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String>
 
 /* ------------------------------- */
 
+fn parse_anything(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String> 
+{
+    let mut dv = None;
+
+    for k in table.keys() {
+        match k.as_str()
+        {
+            "type" => (),
+            
+            "default" => {dv = Some((&table[k]).clone())},
+            
+            other_key => log::warn!("Schema parser got unexpected (ignored) key '{}' in date config", other_key)
+        }
+    }
+
+    Ok((TomlSchema::Anything, dv))
+}
+
+/* ------------------------------- */
+
+fn parse_exact(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String> 
+{
+    let mut dv = None;
+    let mut value = None;
+
+    for k in table.keys() {
+        match k.as_str()
+        {
+            "type" => (),
+            
+            "default" => {dv = Some((&table[k]).clone())},
+
+            "value" => {value = Some(&table[k])}
+            
+            other_key => log::warn!("Schema parser got unexpected (ignored) key '{}' in date config", other_key)
+        }
+    }
+
+    match value {
+        Some(v) => Ok((TomlSchema::Exact(v.clone()), dv)),
+        None => Err("Exact without a value is not allowed".to_string())
+    }
+    
+}
+
+/* ------------------------------- */
+
 fn parse_array(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String>
 {
     let mut min = 0;
@@ -300,7 +351,7 @@ fn parse_table(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String
                                             }
                                             extra_schema = sch;
                                         },
-                                        Err(e) => {return Err(format!("In table extra with key {:?} \n\t{}", extra_key, e))}
+                                        Err(e) => {return Err(format!("In table extra with key {:?} \n{}", extra_key, e))}
                                     }
                                 },
                                 _ => {return Err(format!("Extra entry schemas must be tables but got {:?}", extra_table.get("schema")))}
@@ -333,7 +384,7 @@ fn parse_table(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),String
                             Ok((schema, dv)) => {
                                 entries.insert(custom_key, (schema, dv));
                             },
-                            Err(e) => {return Err(format!("In schema for key {}\n\t{}", custom_key, e));}
+                            Err(e) => {return Err(format!("In schema for key {}\n{}", custom_key, e));}
                         }
                     },
                     _ => {return Err(format!("Schema for key {} should be a table but got {:?}", custom_key, &table[k]))}
@@ -372,7 +423,7 @@ fn parse_alternative(table: &toml::Table) -> Result<(TomlSchema, Option<Value>),
                                     }
                                     options.push(schema)
                                 },
-                                Err(e) => return Err(format!("In alternative option \n\t {}", e))
+                                Err(e) => return Err(format!("In alternative option \n {}", e))
                             }
                         },
                         _ => return Err(format!("Option in alternative must be a table but got {:?}", opt))

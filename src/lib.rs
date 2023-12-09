@@ -7,7 +7,6 @@
 //! 
 //! This crate is very much new and a lot of functionnalities are not fully tested
 //! 
-//! Since toml can get pretty complicated with deep nesting, you may also want to write the schema in JSON and convert it to TOML
 //! 
 //! ## Syntax
 //!  
@@ -72,23 +71,28 @@
 //! ### alternative
 //! - `options` (required) : an array of schemas, a TOML value matches if any of them match
 //! 
-//! ## Example
-//!  ```toml
-//!  type = "table"
-//!  "$extras" = {type = "int"} # prefix a key with '$' to escape schema keys
-//!  some_key = {type = "int"} # '$' is not needed here since 'some key' is not a schema key
-//!  other_key = {type = "bool", default=false} # optional key
+//! ## Examples
 //! 
-//!  [[extras]] # extra keys parsed with regex
-//!  key = "^[a-z_]+$"
-//!  schema = {type = "int"}
+//! - To match any table
 //! 
+//! ```toml
+//! type = "table"
+//! extras = [{key = ".*", schema = {type = "anything"}}]
 //! ```
+//! 
+//! - to match an array of strings
+//! ```toml
+//! type = "array"
+//! child = {type = "string"}
+//! ```
+//! - you may find a basic schema for Cargo.toml files on github at "test_files/test_schema.toml"
+//! 
 //! 
 //! ## Planned additions
 //! - `reference` : a link to another schema (or the schema itself)
 //! - `anything` : a schema that matches anything
 //! - `exact` : a schema that matches only one value
+
 
 use std::collections::{HashMap, HashSet};
 use toml::Value;
@@ -121,7 +125,9 @@ pub enum TomlSchema {
     Bool,
     Float{min: f64, max: f64, nan_ok: bool},
     Table{extras: Vec<TableEntry>, min: usize, max: usize, entries: HashMap<String, (TomlSchema, Option<Value>)>},
-    Array{cond: Box<TomlSchema>, min: usize, max: usize}
+    Array{cond: Box<TomlSchema>, min: usize, max: usize},
+    Anything,
+    Exact(Value)
 }
 
 
@@ -144,32 +150,36 @@ impl TryFrom<toml::Table> for TomlSchema {
 
 /// The error type returned by [TomlSchema::check], it cannot outlive the [TomlSchema] or the [toml::Table] it comes from
 #[derive(Clone, PartialEq)]
-pub enum SchemaError<'a> {
+pub enum SchemaError<'s, 'v> {
     TypeMismatch{expected: SchemaType, got: SchemaType},
-    RegexMiss(&'a str, &'a str),
+    RegexMiss{string: &'v str, re: &'s str},
     FloatMiss{val: f64, min: f64, max: f64, nan_ok: bool},
     IntMiss{val: i64, min: i64, max: i64},
-    ArrayMiss{count: usize, min: usize, max: usize},
-    NoMatch{value: &'a Value, errors: Vec<SchemaError<'a>>},
-    AtIndex{val: &'a Value, error: Box<SchemaError<'a>>},
-    AtKey{key: &'a String, error: Box<SchemaError<'a>>},
-    TableCount{count: usize, min: usize, max: usize}
+    ArrayCount{count: usize, min: usize, max: usize},
+    ArrayMiss{value: &'v Value, error: Box<SchemaError<'s,'v>>},
+    TableMiss{key: &'v str, value: &'v Value, errors: Vec<SchemaError<'s,'v>>},
+    AtKey{key: &'v String, error: Box<SchemaError<'s,'v>>},
+    InTableElement{val: &'v Value, error: Box<SchemaError<'s,'v>>},
+    TableCount{count: usize, min: usize, max: usize},
+    AlternativeMiss{val: &'v Value, errors: Vec<SchemaError<'s,'v>>},
 }
 
 
 
-impl<'a> std::fmt::Debug for SchemaError<'a> {
+impl<'s,'v> std::fmt::Debug for SchemaError<'s,'v> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TypeMismatch{expected, got} => write!(f, "Expected {:?} but got {:?}", expected, got),
-            Self::RegexMiss(key, regex) => write!(f, "Regex {:?} does not match {:?}", regex, key),
+            Self::RegexMiss{string, re} => write!(f, "Regex {:?} does not match {:?}", re, string),
             Self::FloatMiss { val, min, max, nan_ok } => write!(f, "Float {:?} does not match [{:?},{:?}] (nan:{:?})", val,min,max,nan_ok),
             Self::IntMiss { val, min, max } => write!(f, "Int {:?} does not match [{:?},{:?}]",val,min,max),
-            Self::ArrayMiss { count, min, max } => write!(f, "Array count {:?} does not match [{:?},{:?}]",count,min,max),
-            Self::NoMatch { value, errors } => write!(f, "No match for value {:?}, error list: ({:?})", value, errors),
-            Self::AtIndex { val, error } => write!(f, "At value {:?}(..), got ({:?})", val, error),
+            Self::ArrayCount { count, min, max } => write!(f, "Array count {:?} does not match [{:?},{:?}]",count,min,max),
+            Self::ArrayMiss { value, error } => write!(f, "Child of Array {:?} does not match because {:?}", value, error),
+            Self::TableMiss { key, value, errors } => write!(f, "No match for (key = {:?}, value = {:?}), error list : {:?}", key, value, errors),
             Self::AtKey { key, error } => write!(f, "At key '{:?}', got ({:?})", key, error),
+            Self::InTableElement {val, error} => write!(f, "In Array (child {:?}), got ({:?})", val, error),
             Self::TableCount { count, min, max } => write!(f, "Table extra count {:?} does not match [{:?},{:?}]",count,min,max),
+            Self::AlternativeMiss { val, errors } => write!(f, "No Alternative matched for {:?}, error list : {:?}", val, errors)
         }
     }
 }
@@ -182,13 +192,25 @@ impl<'a> std::fmt::Debug for SchemaError<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn init_test() {
+        INIT.call_once(|| {
+        })
+    }
 
     #[test]
     fn parse_test() {
-        let schema_toml = std::fs::read_to_string("test_files/test_schema.toml").unwrap()
-            .parse::<toml::Table>().unwrap();
+        init_test();
+
+        let schema_toml = std::fs::read_to_string("test_files/test_schema.toml").unwrap().parse::<toml::Table>().unwrap(); 
         
-        let schema = TomlSchema::try_from(schema_toml).unwrap();
+        let schema = match TomlSchema::try_from(schema_toml) {
+            Ok(x) => x,
+            Err(e) => {panic!("{}", e.as_str());}
+        };
 
         let test_file = std::fs::read_to_string("Cargo.toml").unwrap();
         schema.check(
@@ -198,14 +220,17 @@ mod test {
 
     #[test]
     fn parse_fail_test() {
-        let schema_toml = std::fs::read_to_string("test_files/test_schema.toml").unwrap()
-        .parse::<toml::Table>().unwrap();
-    
-    let schema = TomlSchema::try_from(schema_toml).unwrap();
+        init_test();
 
-    let test_file = std::fs::read_to_string("test_files/test_schema.toml").unwrap();
-    schema.check(
-        &test_file.parse().unwrap()
-    ).unwrap_err();
+        let schema_toml = std::fs::read_to_string("test_files/test_schema.toml").unwrap().parse::<toml::Table>().unwrap(); 
+        
+        let schema = match TomlSchema::try_from(schema_toml) {
+            Ok(x) => x,
+            Err(e) =>  {panic!("{}", e.as_str());}
+        };
+        let test_file = std::fs::read_to_string("test_files/test_schema.toml").unwrap();
+        schema.check(
+            &test_file.parse().unwrap()
+        ).unwrap_err();
     }
 }

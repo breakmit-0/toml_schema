@@ -3,7 +3,8 @@ use crate::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SchemaType {
     Alternative, String, Integer,
-    Date, Bool, Float, Table, Array
+    Date, Bool, Float, Table, Array,
+    Anything, Exact
 }
 
 impl From<&TomlSchema> for SchemaType {
@@ -17,6 +18,8 @@ impl From<&TomlSchema> for SchemaType {
             TomlSchema::Float{..} => SchemaType::Float,
             TomlSchema::Table{..} => SchemaType::Table,
             TomlSchema::Array{..} => SchemaType::Array,
+            TomlSchema::Anything => SchemaType::Anything,
+            TomlSchema::Exact(_) => SchemaType::Exact
         }
     }
 }
@@ -46,6 +49,8 @@ impl TryFrom<&str> for SchemaType {
             "array" => Ok(SchemaType::Array),
             "table" => Ok(SchemaType::Table),
             "alternative" => Ok(SchemaType::Alternative),
+            "anything" => Ok(SchemaType::Anything),
+            "exact" =>Ok(SchemaType::Exact),
             _ => Err(format!("Invalid schema type {}", value))
         }
     }

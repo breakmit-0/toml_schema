@@ -1,10 +1,108 @@
 
-[package]
-name = {type = "string", regex = "^[a-zA-Z_-]+$"}
-version = {type = "string", regex = "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
-edition = {type = "string"}
-exculde = {type ="array", child = {type = "string"}}
+cargo-features = {type = "array", default = [], child = {type = "string"}}
 
-[[dependencies.extras]]
-key = "^[a-zA-Z_-]+$"
-schema = {type = "string", regex = "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+[package]
+type = "table"
+name = {type = "string", regex = "^[[:alnum:]_-]+$"}
+version = {type = "string", regex = "^[0-9]+\\.[0-9]+\\.[0-9]+(-[[:alnum:]-\\.]+)?(\\+[[:alnum:]\\-\\.]+)?$"}
+
+
+description = {type = "string", default = ""}
+authors = {type = "array", default = [], child = {type = "string"}}
+exculde = {type = "array", default = [], child = {type = "string"}}
+include = {type = "array", default = [], child = {type = "string"}}
+
+extras = [
+    {key = "edition",       schema = {type = "string"}},
+    {key = "rust-version",  schema = {type = "string"}},
+    {key = "documentation", schema = {type = "string"}},
+    {key = "readme",        schema = {type = "string"}},
+    {key = "homepage",      schema = {type = "string"}},
+    {key = "rust-version",  schema = {type = "string"}},
+    {key = "repository",    schema = {type = "string"}},
+    {key = "license",       schema = {type = "string"}},
+    {key = "license-file",  schema = {type = "string"}},
+    {key = "workspace",     schema = {type = "string"}},
+    {key = "build",         schema = {type = "string"}},
+    {key = "links",         schema = {type = "string"}},
+    {key = "default-run",   schema = {type = "string"}}
+]
+
+[package.keywords]
+type = "array"
+max = 5
+child = {type = "string", regex = "^[[:alnum:]\\-\\+_]{1,20}$"}
+default = []
+
+[package.categories]
+type = "array"
+max = 5
+default = []
+child = {type = "string"}
+
+[package.publish]
+type = "alternative"
+options = [
+    {type = "bool"},
+    {type = "array", child = {type = "string"}}
+]
+default = true
+
+[package.metadata]
+type = "table"
+default = {}
+extras = [{key = ".*", schema = {type = "anything"}}]
+
+
+
+
+
+
+
+[lints]
+type = "table"
+default = {}
+extras = [{key = ".*", schema = {type = "anything"}}]
+
+[badges]
+type = "table"
+default = {}
+extras = [{key = ".*", schema = {type = "anything"}}]
+
+[profile]
+type = "table"
+default = {}
+extras = [{key = ".*", schema = {type = "anything"}}]
+
+[target]
+type = "table"
+default = {}
+extras = [{key = ".*", schema = {type = "anything"}}]
+
+[dependencies]
+type = "table"
+default = {}
+
+    [[dependencies.extras]]
+    key = "^[[:alnum:]_-]+$"
+
+        [dependencies.extras.schema]
+        type = "alternative"
+        options = [
+            {type = "string"}, 
+            {type = "table", extras = [{key = ".*", schema = {type = "anything"}}]}
+        ]
+
+[dev-dependencies]
+type = "table"
+default = {}
+
+    [[dev-dependencies.extras]]
+    key = "^[[:alnum:]_-]+$"
+
+        [dev-dependencies.extras.schema]
+        type = "alternative"
+        options = [
+            {type = "string"}, 
+            {type = "table", extras = [{key = ".*", schema = {type = "anything"}}]}
+        ]
